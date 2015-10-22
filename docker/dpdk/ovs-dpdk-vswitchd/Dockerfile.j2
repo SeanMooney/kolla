@@ -1,0 +1,10 @@
+FROM {{ namespace }}/{{ image_prefix }}ovs-dpdk-base:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net/kolla)
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+RUN chmod 755 /usr/local/bin/kolla_extend_start
+RUN mkdir -m 555 /var/log/openvswitch
+RUN mkdir -m 555 /mnt/huge; \
+    echo "hugetlbfs /mnt/huge hugetlbfs defaults 0 0" >> /etc/fstab
+
+{{ include_footer }}

@@ -1,4 +1,11 @@
 ---
+- name: configuring hugepages
+  command: bash -c "mkdir /mnt/huge ; mount -t hugetlbfs  nodev /mnt/huge ; chmod -R 755 /mnt/huge/; echo {{hostvars[inventory_hostname]['hugepages']}} > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages"
+  register: status
+  changed_when: status.stdout.find('changed') != -1
+  when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
+        and neutron_plugin_agent == "openvswitch" and ovs_agent_type == "dpdk"
+
 - name: Starting Openvswitch-db container
   docker:
     tty: True
@@ -11,15 +18,25 @@
     username: "{{ docker_registry_username }}"
     password: "{{ docker_registry_password }}"
     insecure_registry: "{{ docker_insecure_registry }}"
+    privileged: True
     name: openvswitch_db
     image: "{{ openvswitch_db_image_full }}"
     volumes:
       - "/run:/run"
+      - "/var/run/openvswitch:/usr/var/run/openvswitch"
+      - "/lib/modules:/lib/modules:ro"
       - "{{ node_config_directory }}/openvswitch-db-server/:{{ container_config_directory }}/:ro"
     env:
       KOLLA_CONFIG_STRATEGY: "{{ config_strategy }}"
   when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
         and neutron_plugin_agent == "openvswitch"
+
+- name: Ensuring OVS bridge is properly setup
+  command: docker exec openvswitch_db /usr/local/bin/kolla_ensure_openvswitch_configured {{ neutron_bridge_name }} {{ neutron_external_interface }} ; echo  "{{ neutron_bridge_name }} {{ neutron_external_interface }}" > /ran-bridge-setup 
+  register: status
+  changed_when: status.stdout.find('changed') != -1
+  when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
+        and neutron_plugin_agent == "openvswitch" and ovs_agent_type == "dpdk"
 
 - name: Starting Openvswitch-vswitchd container
   docker:
@@ -38,6 +55,8 @@
     image: "{{ openvswitch_vswitchd_image_full }}"
     volumes:
       - "/run:/run"
+      - "/var/run/openvswitch:/usr/var/run/openvswitch"
+      - "/mnt/huge:/mnt/huge"
       - "/lib/modules:/lib/modules:ro"
       - "{{ node_config_directory }}/openvswitch-vswitchd/:{{ container_config_directory }}/:ro"
     env:
@@ -45,12 +64,19 @@
   when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
         and neutron_plugin_agent == "openvswitch"
 
+- name: configuring tunnel interface
+  command: bash -c " sleep 30; ifconfig {{ tunnel_interface }} {{ hostvars[inventory_hostname]['ansible_' + tunnel_interface]['ipv4']['address'] }} netmask {{ hostvars[inventory_hostname]['ansible_' + tunnel_interface]['ipv4']['netmask'] }} up "
+  register: status
+  changed_when: status.stdout.find('changed') != -1
+  when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
+        and neutron_plugin_agent == "openvswitch" and ovs_agent_type == "dpdk"
+
 - name: Ensuring OVS bridge is properly setup
   command: docker exec openvswitch_vswitchd /usr/local/bin/kolla_ensure_openvswitch_configured {{ neutron_bridge_name }} {{ neutron_external_interface }}
   register: status
   changed_when: status.stdout.find('changed') != -1
   when: (inventory_hostname in groups['compute'] or inventory_hostname in groups['neutron-agents'])
-        and neutron_plugin_agent == "openvswitch"
+        and neutron_plugin_agent == "openvswitch" and ovs_agent_type == "kernel"
 
 - name: Starting Neutron-server container
   docker:
@@ -90,6 +116,7 @@
     image: "{{ neutron_openvswitch_agent_image_full }}"
     volumes:
       - "/run:/run"
+      - "/var/run/openvswitch:/usr/var/run/openvswitch"
       - "/lib/modules:/lib/modules:ro"
       - "{{ node_config_directory }}/neutron-openvswitch-agent/:{{ container_config_directory }}/:ro"
       - "/var/lib/kolla/dev/log:/dev/log"
@@ -141,6 +168,7 @@
     name: neutron_agents
     image: "{{ neutron_agents_image_full }}"
     volumes:
+      - "/var/run/openvswitch:/usr/var/run/openvswitch"
       - "/run:/run"
       - "{{ node_config_directory }}/neutron-agents/:{{ container_config_directory }}/:ro"
       - "/var/lib/kolla/dev/log:/dev/log"

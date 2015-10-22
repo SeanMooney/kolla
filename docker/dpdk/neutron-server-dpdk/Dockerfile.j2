@@ -1,0 +1,10 @@
+FROM {{ namespace }}/{{ image_prefix }}neutron-server:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net.kolla)
+
+
+ADD neutron-server-dpdk-archive /opt/
+RUN mv /opt/neutron-server-dpdk-archive-* /opt/networking-ovs-dpdk
+WORKDIR /opt/networking-ovs-dpdk
+RUN pip install .
+
+{{ include_footer }}

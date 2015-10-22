@@ -1,0 +1,17 @@
+
+FROM {{ namespace }}/{{ image_prefix }}dpdk-base:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net/kolla)
+
+ENV OVS_DIR=${OVS_DIR:-/opt/ovs}
+ADD ovs-dpdk-base-archive /opt/
+RUN mv /opt/ovs-dpdk-base-archive-* ${OVS_DIR}
+
+WORKDIR ${OVS_DIR}
+
+RUN ./boot.sh; \
+    ./configure --with-dpdk=${OVS_DPDK_DIR}/${RTE_TARGET} --prefix=/usr; \
+     make -j $(nproc) CFLAGS='-O3 -march=native'; \
+     make install
+{% if base_distro in ['centos', 'ubuntu', 'oraclelinux', 'rhel'] %}
+    RUN ln -s /usr/var/run/openvswitch /var/run/openvswitch
+{% endif %}

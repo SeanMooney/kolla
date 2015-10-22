@@ -42,9 +42,16 @@ firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
 tunnel_types = vxlan
 l2_population = true
 arp_responder = true
+{% if ovs_agent_type == "dpdk" %}
+agent_type = 'DPDK OVS Agent'
+{% endif %}
 
 [ovs]
 bridge_mappings = physnet1:{{ neutron_bridge_name }}
+{% if ovs_agent_type == "dpdk" %}
+datapath_type = 'netdev'
+{% endif %}
+
 {% elif neutron_plugin_agent == "linuxbridge" %}
 [linux_bridge]
 physical_interface_mappings = physnet1:{{ neutron_external_interface }}

@@ -1,0 +1,10 @@
+FROM {{ namespace }}/{{ image_prefix }}ovs-dpdk-base:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net/kolla)
+
+RUN mkdir -p /etc/openvswitch;
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+COPY ovs_ensure_configured.sh /usr/local/bin/kolla_ensure_openvswitch_configured
+RUN chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_ensure_openvswitch_configured
+RUN mkdir -m 555 /var/log/openvswitch
+
+{{ include_footer }}

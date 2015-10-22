@@ -37,6 +37,8 @@
     volumes:
       - "{{ node_config_directory }}/nova-libvirt/:{{ container_config_directory }}/:ro"
       - "/run:/run"
+      - "/var/run/openvswitch:/usr/var/run/openvswitch"
+      - "/mnt/huge:/mnt/huge"
       - "/sys/fs/cgroup:/sys/fs/cgroup"
       - "/lib/modules:/lib/modules:ro"
     volumes_from:

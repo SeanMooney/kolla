@@ -1,0 +1,24 @@
+
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net/kolla)
+
+{% if base_distro in ['centos', 'fedora', 'oraclelinux', 'rhel'] %}
+RUN yum install -y git sed pciutils autoconf libtool fuse-devel kernel-headers kernel-core kernel-modules kernel kernel-devel kernel-modules-extra
+{% elif base_distro in ['ubuntu', 'debian'] %}
+RUN apt-get update && apt-get install -y git sed pciutils autoconf libtool libfuse-dev linux-headers-`uname -r` build-essential; apt-get clean
+{% endif %}
+
+ENV OVS_DPDK_DIR=${OVS_DPDK_DIR:-"/opt/dpdk"}
+ENV RTE_TARGET=${RTE_TARGET:-x86_64-ivshmem-linuxapp-gcc}
+ADD dpdk-base-archive /opt/
+RUN mv /opt/dpdk-base-archive-* ${OVS_DPDK_DIR}
+
+WORKDIR ${OVS_DPDK_DIR}
+RUN  make config T=${RTE_TARGET}; ln -s -f build $RTE_TARGET
+RUN sed "s/CONFIG_RTE_BUILD_COMBINE_LIBS=n/CONFIG_RTE_BUILD_COMBINE_LIBS=y/" -i build/.config; \
+    sed "s/CONFIG_RTE_MAX_MEMSEG=.*$/CONFIG_RTE_MAX_MEMSEG=${OVS_DPDK_MEM_SEGMENTS:-1024}/" -i$ build/.config; \
+    sed "s/CONFIG_RTE_LIBRTE_VHOST=.*$/CONFIG_RTE_LIBRTE_VHOST=${OVS_DPDK_RTE_LIBRTE_VHOST:-y}/" -i build/.config; \
+    sed "s/CONFIG_RTE_LIBRTE_VHOST_DEBUG=.*$/CONFIG_RTE_LIBRTE_VHOST_DEBUG=${OVS_DPDK_VHOST_USER_DEBUG:-n}/" -i build/.config; \
+    sed "s/CONFIG_RTE_LIBRTE_KNI=.*$/CONFIG_RTE_LIBRTE_KNI=n/" -i build/.config
+
+RUN  make -j $(nproc) && cp ${OVS_DPDK_DIR}/build/lib/*dpdk.* /lib

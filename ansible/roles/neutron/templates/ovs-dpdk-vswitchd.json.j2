@@ -1,0 +1,4 @@
+{
+    "command": "/usr/sbin/ovs-vswitchd --dpdk -c 0x2 -n 4  --proc-type primary  --huge-dir /mnt/huge --socket-mem 1024  -- unix:/var/run/openvswitch/db.sock -vconsole:emer -vsyslog:err -vfile:info --mlockall --log-file=/var/log/openvswitch/ovs-vswitchd.log",
+    "config_files": []
+}

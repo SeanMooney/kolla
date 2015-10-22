@@ -1,0 +1,56 @@
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+MAINTAINER Kolla Project (https://launchpad.net/kolla)
+
+{% if base_distro in ['centos', 'fedora', 'oraclelinux', 'rhel'] %}
+
+{% if base_distro in ['fedora'] %}
+    RUN wget http://fedorapeople.org/groups/virt/virt-preview/fedora-virt-preview.repo -O /etc/yum.repos.d/fedora-virt-preview.repo
+
+    RUN yum -y install \
+        libvirt-daemon \
+        libguestfs \
+        qemu-system-x86 \
+        libvirt-daemon-driver-nwfilter \
+        libvirt-daemon-config-nwfilter \
+        libvirt-daemon-driver-lxc \
+        && yum clean all
+{% else %}
+    COPY centos-libvirt-rpms /tmp/install_qemu.sh
+    RUN chmod +x /tmp/install_qemu.sh; /tmp/install_qemu.sh
+{% endif %}
+
+{% elif base_distro in ['ubuntu', 'debian'] %}
+RUN echo "deb http://ubuntu-cloud.archive.canonical.com/ubuntu trusty-updates/kilo main " >> /etc/apt/sources.list
+RUN apt-get update; apt-get install -y --no-install-recommends \
+        ceph-common \
+        libvirt-bin \
+        dmidecode \
+        pm-utils \
+        qemu \
+        qemu-kvm \
+        qemu-block-extra \
+        ebtables \
+    && apt-get clean \
+    && mkdir -p /etc/ceph
+
+{% endif %}
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+RUN chmod 755 /usr/local/bin/kolla_extend_start
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    ENV KVM_CMD=/usr/libexec/qemu-kvm
+{% elif base_distro in ['fedora'] %}
+    ENV KVM_CMD=/usr/bin/qemu-kvm
+{% elif base_distro in ['ubuntu', 'debian'] %}
+    ENV KVM_CMD=/usr/bin/kvm
+{% endif %}
+
+RUN mv ${KVM_CMD} ${KVM_CMD}.orig
+COPY kvm-wrapper.sh ${KVM_CMD}
+RUN chmod +x ${KVM_CMD}
+
+RUN echo 'user = "root"' >> /etc/libvirt/qemu.conf ; echo 'group = "root"' >> /etc/libvirt/qemu.conf 
+
+
+{{ include_footer }}
