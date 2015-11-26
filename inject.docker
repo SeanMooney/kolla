@@ -1,0 +1,6 @@
+ENV PIP_INDEX_URL=http://192.168.1.10:3141/root/pypi/+simple/
+ENV PIP_TRUSTED_HOST=192.168.1.10
+
+RUN echo 'Acquire::HTTP::Proxy "http://192.168.1.10:3142";' > /etc/apt/apt.conf ; \
+    echo 'Acquire::HTTPS::Proxy "false";' >> /etc/apt/apt.conf
+RUN apt-get update
