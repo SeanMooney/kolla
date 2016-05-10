@@ -1,0 +1,42 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+MAINTAINER {{ maintainer }}
+ENV container docker
+RUN $(cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ "$i" == "systemd-tmpfiles-setup.service" ] || rm -f $i; done); \
+rm -f /lib/systemd/system/multi-user.target.wants/*;\
+rm -f /etc/systemd/system/*.wants/*;\
+rm -f /lib/systemd/system/local-fs.target.wants/*; \
+rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+rm -f /lib/systemd/system/basic.target.wants/*;\
+rm -f /lib/systemd/system/anaconda.target.wants/*;
+VOLUME [ "/sys/fs/cgroup" ]
+
+{% if base_distro in ['centos', 'fedora', 'oraclelinux', 'rhel'] %}
+RUN yum install -y epel-release mariadb-server rabbitmq-server && \
+    ln -s /etc/init.d/mysql  /etc/init.d/mariadb
+{% elif base_distro in ['ubuntu', 'debian'] %}
+{% endif %}
+
+
+ADD bifrost-base-archive /bifrost-base-source
+RUN ln -s bifrost-base-source/* bifrost \
+    && useradd --user-group bifrost \
+    && /var/lib/kolla/venv/bin/pip --no-cache-dir install --upgrade -c requirements/upper-constraints.txt /bifrost \
+    && mkdir -p /etc/bifrost /home/bifrost \
+    && chown -R bifrost: /etc/bifrost /home/bifrost \
+    && find /bifrost/playbooks -type f -exec sed -e 's/service: .* state=started/debug: msg="skipping service start" /g' -i '{}' \;
+
+WORKDIR /bifrost
+RUN bash ./scripts/env-setup.sh
+RUN mysqld --user=root >/dev/null &
+RUN source ./env-vars && source /opt/stack/ansible/hacking/env-setup && \
+    ansible-playbook -vvvv -i /bifrost/playbooks/inventory/localhost /bifrost/playbooks/install.yaml -e skip_bootstrap -e skip_start
+
+COPY bifrost_sudoers /etc/sudoers.d/bifrost_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+RUN usermod -a -G kolla bifrost \
+    && chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/bifrost_sudoers \
+    && touch /usr/local/bin/kolla_bifrost_extend_start \
+    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_bifrost_extend_start

@@ -1,0 +1,29 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+MAINTAINER {{ maintainer }}
+
+{% if base_distro in ['centos', 'fedora', 'oraclelinux', 'rhel'] %}
+RUN yum install -y epel-release nano
+{% elif base_distro in ['ubuntu', 'debian'] %}
+{% endif %}
+
+
+ADD bifrost-base-archive /bifrost-base-source
+COPY build_arg.yml /tmp/build_arg.yml
+RUN ln -s bifrost-base-source/* bifrost \
+    && useradd --user-group bifrost \
+    && /var/lib/kolla/venv/bin/pip --no-cache-dir install --upgrade -c requirements/upper-constraints.txt /bifrost \
+    && mkdir -p /etc/bifrost /home/bifrost \
+    && chown -R bifrost: /etc/bifrost /home/bifrost
+
+WORKDIR /bifrost
+RUN bash ./scripts/env-setup.sh && source ./env-vars && source /opt/stack/ansible/hacking/env-setup && \
+    ansible-playbook -vvvv -i /bifrost/playbooks/inventory/localhost /bifrost/playbooks/install.yaml -e @/tmp/build_arg.yml
+
+COPY bifrost_sudoers /etc/sudoers.d/bifrost_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+RUN usermod -a -G kolla bifrost \
+    && chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/bifrost_sudoers \
+    && touch /usr/local/bin/kolla_bifrost_extend_start \
+    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_bifrost_extend_start

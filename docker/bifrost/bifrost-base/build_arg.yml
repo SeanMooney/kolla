@@ -1,0 +1,7 @@
+skip_bootstrap: true
+skip_start: true
+install_dib: true
+create_image_via_dib: false
+bifrost_venv_dir: "/var/lib/kolla/venv"
+enable_venv: true
+ansible_python_interpreter: /var/lib/kolla/venv/bin/python
